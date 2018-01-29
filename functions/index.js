@@ -21,8 +21,10 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 admin.initializeApp(functions.config().firebase);
 
-const know = admin.database().ref('/animal-knowledge');
-const graph = know.child('graph');
+// const know = admin.database().ref('/animal-knowledge');
+// const graph = know.child('graph');
+
+const status = admin.database().ref('/status');
 
 // Dialogflow Intent names
 const PLAY_INTENT = 'play';
@@ -50,8 +52,8 @@ const ANSWER_PARAM = 'answer';
 const QUESTION_PARAM = 'question';
 
 exports.assistantcodelab = functions.https.onRequest((request, response) => {
-   // console.log('headers: ' + JSON.stringify(request.headers));
-   // console.log('body: ' + JSON.stringify(request.body));
+   console.log('headers: ' + JSON.stringify(request.headers));
+   console.log('body: ' + JSON.stringify(request.body));
 
    const assistant = new Assistant({request: request, response: response});
 
@@ -65,28 +67,15 @@ exports.assistantcodelab = functions.https.onRequest((request, response) => {
    assistant.handleRequest(actionMap);
 
    function play(assistant) {
-       console.log('play');
-       const first_ref = know.child('first');
-       first_ref.once('value', snap => {
-           const first = snap.val();
-           // console.log('First: ${first}');
-           graph.child(first).once('value', snap => {
-               // const speech = 'Great! Think of an animal, but do not tell me what it is yet. Okay, my first question is: ${snap.val().q}';
-               const speech = `<speak>
-Great! Bitch. <break time="3"/>
-Okay, my first question is: ${snap.val().q}
-</speak>`;
-               const parameters = {};
-               parameters[ID_PARAM] = snap.key;
-               assistant.setContext(QUESTION_CONTEXT, 5, parameters);
-               assistant.ask(speech);
-           });
+       status.once('value', snap => {
+           const speech = `Okay, you currently have ${snap.val().expired} expired food at the moment, ${snap.val().good} food in good status at the moment, and ${snap.val().expired} food that is about to expired soon. Would you like to make a recipe with this food?`;
+           assistant.ask(speech);
        });
+
    }
 
    function discriminate(assistant) {
        const priorQuestion = assistant.getContextArgument(QUESTION_CONTEXT, ID_PARAM).value;
-
        const intent = assistant.getIntent();
        let yes_no;
        if (YES_INTENT === intent) {
@@ -95,104 +84,17 @@ Okay, my first question is: ${snap.val().q}
            yes_no = 'n';
        }
 
-       // console.log(`prior question: ${priorQuestion}`);
-
-       graph.child(priorQuestion).once('value', snap => {
-           const next = snap.val()[yes_no];
-           graph.child(next).once('value', snap => {
-               const node = snap.val();
-               if (node.q) {
-                   const speech = node.q;
-
-                   const parameters = {};
-                   parameters[ID_PARAM] = snap.key;
-                   assistant.setContext(QUESTION_CONTEXT, 5, parameters);
-                   assistant.ask(speech);
-               } else {
-                   const guess = node.a;
-                   // const speech = 'Is it a ${guess}?';
-                   const speech = `Is it a ${guess}?`;
-
-                   const parameters = {};
-                   parameters[ID_PARAM] = snap.key;
-                   parameters[BRANCH_PARAM] = yes_no;
-                   assistant.setContext(GUESS_CONTEXT, 5, parameters);
-                   assistant.ask(speech);
-               }
-           });
-       });
    }
 
    function giveUp(assistant) {
-       const priorQuestion = assistant.getContextArgument(QUESTION_CONTEXT, ID_PARAM).value;
-       const guess = assistant.getContextArgument(GUESS_CONTEXT, ID_PARAM).value;
-       // console.log(`Priorq: ${priorQuestion}, guess: ${guess}`);
 
-       const speech = 'I give up!  What are you thinking of?';
-
-       const parameters = {};
-       parameters[LEARN_THING_PARAM] = true;
-       assistant.setContext(LEARN_THING_CONTEXT, 2, parameters);
-       assistant.ask(speech);
    }
 
    function learnThing(assistant) {
-       const priorQuestion = assistant.getContextArgument(QUESTION_CONTEXT, ID_PARAM).value;
-       const guess = assistant.getContextArgument(GUESS_CONTEXT, ID_PARAM).value;
-       const branch = assistant.getContextArgument(GUESS_CONTEXT, BRANCH_PARAM).value;
-       const new_thing = assistant.getArgument(GUESSABLE_THING_PARAM);
 
-       // console.log('Priorq: ${priorQuestion}, guess: ${guess}, branch: ${branch}, thing: ${new_thing}');
-
-       const q_promise = graph.child(priorQuestion).once('value');
-       const g_promise = graph.child(guess).once('value');
-       Promise.all([q_promise, g_promise]).then(results => {
-           const q_snap = results[0];
-           const g_snap = results[1];
-
-           // TODO codelab-1: set the proper contexts to learn the differentiation
-           // const speech = 'I do not know how to tell a ${new_thing} from a ${g_snap.val().a}!';
-           const speech = `I don't know how to tell a ${new_thing} from a ${g_snap.val().a}!`;
-           assistant.ask(speech);
-           return true;
-       }).catch(error => {
-           //console.log(error);
-       });
    }
 
    function learnDiscrimination(assistant) {
-       const priorQuestion = assistant.getContextArgument(QUESTION_CONTEXT, ID_PARAM).value;
-       const guess = assistant.getContextArgument(GUESS_CONTEXT, ID_PARAM).value;
-       const branch = assistant.getContextArgument(GUESS_CONTEXT, BRANCH_PARAM).value;
-       const answer =  assistant.getContextArgument(ANSWER_CONTEXT, ANSWER_PARAM).value;
-       const question = assistant.getArgument(QUESTION_PARAM);
 
-       // console.log(`Priorq: ${priorQuestion}, answer: ${answer}, guess: ${guess}, branch: ${branch}, question: ${question}`);
-
-       const a_node = graph.push({
-           a: answer
-       });
-
-       const q_node = graph.push({
-           q: `${question}?`,
-           y: a_node.key,
-           n: guess
-       });
-
-       let predicate = 'a';
-       if (['a','e','i','o','u'].indexOf(answer.charAt(0)) !== -1) {
-           predicate = 'an';
-       }
-
-       const update = {};
-       update[branch] = q_node.key;
-       graph.child(priorQuestion).update(update).then(() => {
-           // TODO codelab-2: give the user an option to play again or end the conversation
-           const speech = "Ok, thanks for the information!";
-           assistant.ask(speech);
-           return true;
-       }).catch(error => {
-
-       });
    }
 });
