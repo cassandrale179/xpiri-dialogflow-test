@@ -6,7 +6,9 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 admin.initializeApp(functions.config().firebase);
 
-const status = admin.database().ref('/status');
+const storage = admin.database().ref('/storage');
+const count = admin.database().ref('/count');
+const recipetitle = admin.database().ref('/recipetitle');
 
 // Dialogflow Intent names
 const PLAY_INTENT = 'play';
@@ -37,8 +39,8 @@ exports.assistantcodelab = functions.https.onRequest((request, response) => {
 
    //--------- DESCRIBE TO THE USER THE STATUS OF THE FOOD -------
    function play(assistant) {
-       status.once('value', snap => {
-           const speech = `Okay, you currently have ${snap.val().expired} expired food, ${snap.val().good} food in good status, and ${snap.val().expired} that is about to expired soon. Would you like to know more details?`;
+       count.once('value', snap => {
+           const speech = `Okay, you currently have ${snap.val().expired} expired food, ${snap.val().good} food in good status, and ${snap.val().expired} that is stale. Would you like to know more details?`;
            assistant.ask(speech);
        });
 
@@ -53,9 +55,10 @@ exports.assistantcodelab = functions.https.onRequest((request, response) => {
 
    //-------- GET A RECIPE -------
    function findrecipe(assistant){
-       const speech = `Okay, I found a recipe for you. It's a dish called Lobster Roll. For more information, check out the website for more information. Can I help you with anything else?`;
-       assistant.ask(speech);
+       recipetitle.once('value', snap => {
+           const speech = `Okay, I found a recipe for you. It's a dish called ${snap.val().title} For more information, check out the website for more information. Can I help you with anything else?`;
+           assistant.ask(speech);
+       });
    }
-
 
 });
