@@ -28,10 +28,6 @@ const BRANCH_PARAM = 'branch';
 const ANSWER_PARAM = 'answer';
 const QUESTION_PARAM = 'question';
 
-//-------- TWILIO API STUFF ----------
-const accountSid = 'ACa25b9e68025c8db22bb5d85e4e930cc5';
-const authToken = 'b3914f78318a81ab0603b02b2256ff93';
-const client = require('twilio')(accountSid, authToken);
 
 //------------------ EXPORT THE FUNCTION -----------------------------
 exports.assistantcodelab = functions.https.onRequest((request, response) => {
@@ -72,11 +68,6 @@ exports.assistantcodelab = functions.https.onRequest((request, response) => {
            const speech = `Okay, I found a recipe for you. It's a dish called ${snap.val().title} For more information, check out the website. Can I help you with anything else?`;
            assistant.ask(speech);
        });
-   }
-
-//  ------ SEND A TEXT MESSAGE -----
-   function sendmessage(assistant){
-
    }
 
 });
